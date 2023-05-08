@@ -74,63 +74,133 @@ class ML_models():
             else:
                 k_hids.append(hids[rids])
         return k_hids
-
-
-    def ml_train(self):
-        k_hids=self.create_kfolds()
-        
-        labels=pd.read_csv('./data/csv/labels.csv', header=0)
-        for i in range(self.k_fold):
-            print("==================={0:2d} FOLD=====================".format(i))
-            test_hids=k_hids[i]
-            train_ids=list(set([0,1,2,3,4])-set([i]))
-            train_hids=[]
-            for j in train_ids:
-                train_hids.extend(k_hids[j])                    
+    
+    def getXY(self,ids,labels,concat_cols):
+        X_list = []
+        y_list = []
+        features=[]
+        #print(ids)
+        i = 0
+        for sample in ids:
+            print("processing number ", i )
+            i +=1
+            if self.data_icu:
+                y=labels[labels['stay_id']==sample]['label']
+            else:
+                y=labels[labels['hadm_id']==sample]['label']
             
-            concat_cols=[]
-            if(self.concat):
-                dyn=pd.read_csv('./data/csv/'+str(train_hids[0])+'/dynamic.csv',header=[0,1])
+            #print(sample)
+            dyn=pd.read_csv('./data/csv/'+str(sample)+'/dynamic.csv',header=[0,1])
+            
+            if self.concat:
                 dyn.columns=dyn.columns.droplevel(0)
-                cols=dyn.columns
-                time=dyn.shape[0]
-
-                for t in range(time):
-                    cols_t = [x + "_"+str(t) for x in cols]
-
-                    concat_cols.extend(cols_t)
-
-            X_train,Y_train=self.getXY(train_hids,labels,concat_cols)
-            #encoding categorical
-            gen_encoder = LabelEncoder()
-            eth_encoder = LabelEncoder()
-            ins_encoder = LabelEncoder()
-            age_encoder = LabelEncoder()
-            gen_encoder.fit(X_train['gender'])
-            eth_encoder.fit(X_train['ethnicity'])
-            ins_encoder.fit(X_train['insurance'])
-            #age_encoder.fit(X_train['Age'])
-            X_train['gender']=gen_encoder.transform(X_train['gender'])
-            X_train['ethnicity']=eth_encoder.transform(X_train['ethnicity'])
-            X_train['insurance']=ins_encoder.transform(X_train['insurance'])
-            #X_train['Age']=age_encoder.transform(X_train['Age'])
-
-            print(X_train.shape)
-            print(Y_train.shape)
+                dyn=dyn.to_numpy()
+                dyn=dyn.reshape(1,-1)
+                #print(dyn.shape)
+                #print(len(concat_cols))
+                dyn_df=pd.DataFrame(data=dyn,columns=concat_cols)
+                features=concat_cols
+            else:
+                dyn_df=pd.DataFrame()
+                for key in dyn.columns.levels[0]:
+                    dyn=dyn[key]
+                    if self.data_icu:
+                        if ((key=="CHART") or (key=="MEDS")):
+                            agg=dyn.aggregate("mean")
+                            agg=agg.reset_index()
+                        else:
+                            agg=dyn.aggregate("max")
+                            agg=agg.reset_index()
+                    else:
+                        if ((key=="LAB") or (key=="MEDS")):
+                            agg=dyn.aggregate("mean")
+                            agg=agg.reset_index()
+                        else:
+                            agg=dyn.aggregate("max")
+                            agg=agg.reset_index()
+                    if dyn_df.empty:
+                        dyn_df=agg
+                    else:
+                        dyn_df=pd.concat([dyn_df,agg],axis=0)
+                        
+            #print(dyn.shape)
+            #print(dyn.head())
+            stat=pd.read_csv('./data/csv/'+str(sample)+'/static.csv',header=[0,1])
+            stat=stat['COND']
+            #print(stat.shape)
+            demo=pd.read_csv('./data/csv/'+str(sample)+'/demo.csv',header=0)
+            #print(demo.shape)
             
-            X_test,Y_test=self.getXY(test_hids,labels,concat_cols)
-            self.test_data=X_test.copy(deep=True)
-            X_test['gender']=gen_encoder.transform(X_test['gender'])
-            X_test['ethnicity']=eth_encoder.transform(X_test['ethnicity'])
-            X_test['insurance']=ins_encoder.transform(X_test['insurance'])
-            #X_test['Age']=age_encoder.transform(X_test['Age'])
+            #print(X_df.head())
+            
+            X = pd.concat([dyn_df, stat, demo], axis=1)
+            X_list.append(X)
+            y_list.append(y)
+            print(f"finish load sample {sample}")
+            
+        X_df = pd.concat(X_list, axis=0)
+        y_df = pd.concat(y_list, axis=0) 
+        
+        # save to csv file
+        
+        return X_df ,y_df
+
+
+#     def ml_train(self):
+#         k_hids=self.create_kfolds()
+        
+#         labels=pd.read_csv('./data/csv/labels.csv', header=0)
+#         for i in range(self.k_fold):
+#             print("==================={0:2d} FOLD=====================".format(i))
+#             test_hids=k_hids[i]
+#             train_ids=list(set([0,1,2,3,4])-set([i]))
+#             train_hids=[]
+#             for j in train_ids:
+#                 train_hids.extend(k_hids[j])                    
+            
+#             concat_cols=[]
+#             if(self.concat):
+#                 dyn=pd.read_csv('./data/csv/'+str(train_hids[0])+'/dynamic.csv',header=[0,1])
+#                 dyn.columns=dyn.columns.droplevel(0)
+#                 cols=dyn.columns
+#                 time=dyn.shape[0]
+
+#                 for t in range(time):
+#                     cols_t = [x + "_"+str(t) for x in cols]
+
+#                     concat_cols.extend(cols_t)
+
+#             X_train,Y_train=self.getXY(train_hids,labels,concat_cols)
+#             #encoding categorical
+#             gen_encoder = LabelEncoder()
+#             eth_encoder = LabelEncoder()
+#             ins_encoder = LabelEncoder()
+#             age_encoder = LabelEncoder()
+#             gen_encoder.fit(X_train['gender'])
+#             eth_encoder.fit(X_train['ethnicity'])
+#             ins_encoder.fit(X_train['insurance'])
+#             #age_encoder.fit(X_train['Age'])
+#             X_train['gender']=gen_encoder.transform(X_train['gender'])
+#             X_train['ethnicity']=eth_encoder.transform(X_train['ethnicity'])
+#             X_train['insurance']=ins_encoder.transform(X_train['insurance'])
+#             #X_train['Age']=age_encoder.transform(X_train['Age'])
+
+#             print(X_train.shape)
+#             print(Y_train.shape)
+            
+#             X_test,Y_test=self.getXY(test_hids,labels,concat_cols)
+#             self.test_data=X_test.copy(deep=True)
+#             X_test['gender']=gen_encoder.transform(X_test['gender'])
+#             X_test['ethnicity']=eth_encoder.transform(X_test['ethnicity'])
+#             X_test['insurance']=ins_encoder.transform(X_test['insurance'])
+#             #X_test['Age']=age_encoder.transform(X_test['Age'])
             
             
-            print(X_test.shape)
-            print(Y_test.shape)
-            #print("just before training")
-            #print(X_test.head())
-            self.train_model(X_train,Y_train,X_test,Y_test)
+#             print(X_test.shape)
+#             print(Y_test.shape)
+#             #print("just before training")
+#             #print(X_test.head())
+#             self.train_model(X_train,Y_train,X_test,Y_test)
     
     def train_model(self,X_train,Y_train,X_test,Y_test):
         #logits=[]
