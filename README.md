@@ -37,6 +37,19 @@ Follow instructions to get access to MIMIC-IV dataset.
 
 Download the files using your terminal: wget -r -N -c -np --user mehakg --ask-password https://physionet.org/files/mimiciv/1.0/
 
+Save downloaded files in the parent directory of this github repo.
+
+The structure should look like below for v1.0-
+
+mimiciv/1.0/core
+mimiciv/1.0/hosp
+mimiciv/1.0/icu
+
+The structure should look like below for v2.0-
+
+mimiciv/2.0/hosp
+mimiciv/2.0/icu
+
 **How to run the pipeline**
 
 - After downloading the repo, open **mainPipeline.ipynb**.
